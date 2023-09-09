@@ -30,7 +30,8 @@ const (
 
 type (
 	configs struct {
-		YigaosuToken string `Yigaosu token`
+		YigaosuPhone             string `Yigaosu login phone`
+		YigaosuEncryptedPassword string `Yigaosu login encrypted password`
 
 		GitRemoteName  string `Name for the git remote repository`
 		GitRemoteUrl   string `URL for the git remote repository`
@@ -67,8 +68,8 @@ func newCard(b yigaosu.ETCCard) card {
 func newBill(b yigaosu.ETCCardBill) bill {
 	return bill{
 		Amount:  b.TotalAmount,
-		BeginAt: time.Unix(b.StartTime/1000, 0),
-		EndAt:   time.Unix(b.EndTime/1000, 0),
+		BeginAt: time.Unix(b.StartTime/1000, 0).UTC(),
+		EndAt:   time.Unix(b.EndTime/1000, 0).UTC(),
 		From:    strings.TrimSuffix(b.StartStation, "驶入"),
 		To:      strings.TrimSuffix(b.EndStation, "驶出"),
 	}
@@ -166,11 +167,14 @@ func main() {
 }
 
 func write() (filenames []string, err error) {
-	client := yigaosu.Client{
-		Token: conf.YigaosuToken,
-	}
-
 	ctx := context.Background()
+
+	var client *yigaosu.Client
+	client, err = yigaosu.Login(ctx, conf.YigaosuPhone, conf.YigaosuEncryptedPassword)
+	if err != nil {
+		err = fmt.Errorf("Login: %w", err)
+		return
+	}
 
 	var cards []yigaosu.ETCCard
 	cards, err = client.GetETCCards(ctx)

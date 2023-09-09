@@ -3,7 +3,7 @@ module github.com/caiguanhao/yigaosu/yigaosusync
 go 1.20
 
 require (
-	github.com/caiguanhao/yigaosu v1.0.0
+	github.com/caiguanhao/yigaosu v1.1.0
 	github.com/go-git/go-git/v5 v5.8.1
 	github.com/gopsql/goconf v1.3.0
 	golang.org/x/crypto v0.12.0
