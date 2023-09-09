@@ -8,22 +8,69 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
 type Client struct {
-	Token string // JWT
+	AccessToken string
+}
+
+type loginResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    *struct {
+		AccessToken string `json:"access_token"`
+	} `json:"data"`
+}
+
+func Login(ctx context.Context, phone, encryptedPassword string) (*Client, error) {
+	data := url.Values{
+		"appVersion":     {"5.2.7"},
+		"client_id":      {"00000000-0000-0000-0000-000000000000"},
+		"login_name":     {phone},
+		"login_password": {encryptedPassword},
+		"model":          {"iPhone 13"},
+		"os":             {"ios"},
+		"osVersion":      {"16.6"},
+		"state":          {"1"},
+		"type":           {"cipher"},
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://eapi.yigaosu.com/login/loginByPassWord", strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var ret loginResponse
+	err = json.Unmarshal(body, &ret)
+	if err != nil {
+		return nil, err
+	}
+	if ret.Code != 200 {
+		return nil, fmt.Errorf("failed to login (error status: %d, message: %s)", ret.Code, ret.Message)
+	}
+	if ret.Data == nil {
+		return nil, fmt.Errorf("no login data found")
+	}
+	return &Client{
+		AccessToken: ret.Data.AccessToken,
+	}, nil
 }
 
 type ETCCard struct {
-	CardCode         string `json:"cardCode"`         // 1
-	CardNo           string `json:"cardNo"`           // XXXXXXXXXXXXXXXXXXXX
-	CardNoFormat     string `json:"cardNoFormat"`     // XXXX********XXXXXXXX
-	CardType         string `json:"cardType"`         // 记账卡
-	ETCCardStatus    string `json:"etcCardStatus"`    // 1
-	ETCCardStatusMsg string `json:"etcCardStatusMsg"` // 正常使用
-	PlateNo          string `json:"plateNo"`          // 粤XX
-	ValidTime        int64  `json:"validTime"`        // 1973692800000
+	CardCode string `json:"cardCode"` // 1
+	CardNo   string `json:"cardNo"`   // XXXXXXXXXXXXXXXXXXXX
+	CardType string `json:"cardType"` // 记账卡
+	PlateNo  string `json:"plateNo"`  // 粤XX
 }
 
 type etcCardListResponse struct {
@@ -34,11 +81,11 @@ type etcCardListResponse struct {
 
 // Get list of ETC cards of current user.
 func (c Client) GetETCCards(ctx context.Context) ([]ETCCard, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://weapi.yigaosu.com/etcFree/findEtcCardList", nil)
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://eapi.yigaosu.com/etcCard/plateNo", nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Add("Authorization", c.Token)
+	req.Header.Add("access_token", c.AccessToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -54,7 +101,7 @@ func (c Client) GetETCCards(ctx context.Context) ([]ETCCard, error) {
 		return nil, err
 	}
 	if data.Code != 200 {
-		return nil, fmt.Errorf("failed to get ETC cards (error status %d)", data.Code)
+		return nil, fmt.Errorf("failed to get ETC cards (error status: %d, message: %s)", data.Code, data.Message)
 	}
 	return data.Data, nil
 }
@@ -94,11 +141,11 @@ func (c Client) GetETCCardBillsPage(ctx context.Context, card ETCCard, limit, pa
 	y, m, _ := now.Date()
 	endDate := fmt.Sprintf("%d000", time.Date(y, m+1, 1, 0, 0, 0, 0, now.Location()).Add(-1*time.Second).Unix())
 
-	baseURL, _ := url.Parse("https://weapi.yigaosu.com/etcCard/etcBillList")
+	baseURL, _ := url.Parse("https://eapi.yigaosu.com/etcCard/etcBillList")
 	params := url.Values{}
 	params.Add("plateNo", card.PlateNo)
 	params.Add("cardNo", card.CardNo)
-	params.Add("cardType", card.CardType)
+	params.Add("cardType", card.CardCode)
 	params.Add("startDate", "0")
 	params.Add("endDate", endDate)
 	params.Add("limit", strconv.Itoa(limit))
@@ -108,7 +155,7 @@ func (c Client) GetETCCardBillsPage(ctx context.Context, card ETCCard, limit, pa
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Add("Authorization", c.Token)
+	req.Header.Add("access_token", c.AccessToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -124,7 +171,7 @@ func (c Client) GetETCCardBillsPage(ctx context.Context, card ETCCard, limit, pa
 		return nil, err
 	}
 	if data.Code != 200 {
-		return nil, fmt.Errorf("failed to get ETC card bills (error status %d)", data.Code)
+		return nil, fmt.Errorf("failed to get ETC card bills (error status: %d, message: %s)", data.Code, data.Message)
 	}
 	return data.Data.BillList, nil
 }

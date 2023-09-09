@@ -3,18 +3,22 @@ package yigaosu
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 )
 
 func Test(t *testing.T) {
-	token := os.Getenv("TOKEN")
-	if token == "" {
-		t.Fatal("Set TOKEN env first")
-	}
-	client := Client{
-		Token: token,
+	login := os.Getenv("YIGAOSU_LOGIN")
+	parts := strings.Split(login, ",")
+	if len(parts) < 2 {
+		t.Fatal("Set env first: YIGAOSU_LOGIN=PHONE,ENCRYPTED_PASSWORD")
 	}
 	ctx := context.Background()
+	client, err := Login(ctx, parts[0], parts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("using access token:", client.AccessToken)
 	cards, err := client.GetETCCards(ctx)
 	if err != nil {
 		t.Fatal(err)
