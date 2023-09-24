@@ -56,7 +56,8 @@ type (
 )
 
 var (
-	conf configs
+	conf  configs
+	debug bool
 )
 
 func newCard(b yigaosu.ETCCard) card {
@@ -83,6 +84,7 @@ func main() {
 	configFile := flag.String("c", defaultConfigFile, "location of the config file")
 	createConfig := flag.Bool("C", false, "create (update if exists) config file and exit")
 	gitForcePush := flag.Bool("force-push", false, "git force push only")
+	flag.BoolVar(&debug, "debug", false, "debug")
 	flag.Parse()
 
 	content, err := ioutil.ReadFile(*configFile)
@@ -168,6 +170,9 @@ func main() {
 
 func write() (filenames []string, err error) {
 	ctx := context.Background()
+	if debug {
+		ctx = context.WithValue(ctx, "DEBUG", true)
+	}
 
 	var client *yigaosu.Client
 	client, err = yigaosu.Login(ctx, conf.YigaosuPhone, conf.YigaosuEncryptedPassword)
