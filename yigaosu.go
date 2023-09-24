@@ -1,12 +1,16 @@
 package yigaosu
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -41,12 +45,14 @@ func Login(ctx context.Context, phone, encryptedPassword string) (*Client, error
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	debugRequest(ctx, req)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
+	debugResponse(ctx, resp, body)
 	if err != nil {
 		return nil, err
 	}
@@ -86,12 +92,14 @@ func (c Client) GetETCCards(ctx context.Context) ([]ETCCard, error) {
 		return nil, err
 	}
 	req.Header.Add("access_token", c.AccessToken)
+	debugRequest(ctx, req)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
+	debugResponse(ctx, resp, body)
 	if err != nil {
 		return nil, err
 	}
@@ -156,12 +164,14 @@ func (c Client) GetETCCardBillsPage(ctx context.Context, card ETCCard, limit, pa
 		return nil, err
 	}
 	req.Header.Add("access_token", c.AccessToken)
+	debugRequest(ctx, req)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
+	debugResponse(ctx, resp, body)
 	if err != nil {
 		return nil, err
 	}
@@ -174,4 +184,42 @@ func (c Client) GetETCCardBillsPage(ctx context.Context, card ETCCard, limit, pa
 		return nil, fmt.Errorf("failed to get ETC card bills (error status: %d, message: %s)", data.Code, data.Message)
 	}
 	return data.Data.BillList, nil
+}
+
+func debugRequest(ctx context.Context, req *http.Request) {
+	if !isDebug(ctx) {
+		return
+	}
+	dump, err := httputil.DumpRequestOut(req, true)
+	if err != nil {
+		return
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(dump))
+	for scanner.Scan() {
+		fmt.Fprintln(os.Stderr, "[DEBUG]", scanner.Text())
+	}
+}
+
+func debugResponse(ctx context.Context, resp *http.Response, body []byte) {
+	if !isDebug(ctx) {
+		return
+	}
+	dump, err := httputil.DumpResponse(resp, false)
+	if err != nil {
+		return
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(dump))
+	for scanner.Scan() {
+		fmt.Fprintln(os.Stderr, "[DEBUG]", scanner.Text())
+	}
+	if len(body) > 1024 {
+		fmt.Fprintln(os.Stderr, "[DEBUG]", string(body[:1024]), "...")
+	} else {
+		fmt.Fprintln(os.Stderr, "[DEBUG]", string(body))
+	}
+}
+
+func isDebug(ctx context.Context) bool {
+	debug, ok := ctx.Value("DEBUG").(bool)
+	return ok && debug
 }
